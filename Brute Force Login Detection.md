@@ -1,119 +1,141 @@
-# Brute Force Followed by Privileged Login
 
-## Detection Objective: 
- To detect a brute-force login attack followed by a successful privileged login using Windows Event Logs: 4625 (failure), 4624 (success) and managed, configure an alert in Kibana via Elastic Stack.    
-## Tools:
-•	SIEM Stack: Elasticsearch, Kibana.
+# 🚨 Brute Force Followed by Privileged Login
 
-•	Log Forwarders: Sysmon, Winlogbeat 
+## 🎯 Detection Objective
+Detect a brute-force login attack followed by a successful privileged login using Windows Event IDs:  
+- `4625` → Failed login  
+- `4624` → Successful login  
 
-•	Target OS: Windows 10 (victim VM)
+Set up alerts using Kibana (Elasticsearch stack) and ElastAlert.
 
-•	Attacker Machine: Kali Linux
+---
 
-•	Attacking Tool: Hydra Tool
+## 🛠️ Tools Used
+- **SIEM Stack**: Elasticsearch, Kibana  
+- **Log Forwarders**: Winlogbeat, Sysmon  
+- **Target OS**: Windows 10 (Victim VM)  
+- **Attacker Machine**: Kali Linux  
+- **Attacking Tool**: Hydra  
 
-## Lab Setup:
-	
-Installed Winlogbeat in a Windows VM to forward security logs to Elasticsearch. Then, I set up Elasticsearch and Kibana to store and view logs. Configured ElastAlert with a rule to detect 10 failed login attempts (event  ID 4625) from the same IP within 5 minutes. Triggered a brute-force simulation and successfully received an alert via email using Gmail SMTP. While setting up the ElastAlert configuration I had faced my many throwing errors because of missing required fields in the config.yaml and rule.yaml files. 
-## Detection Logic:
-	
-Detect if 10 or more failed login attempts (Event ID 4625) are observed from the same IP address within 5 minutes, and send an email alert.
+---
 
-## Elasticsearch Query DSL:
-    {
-      "query": {
-        "bool": {
-          "must": [
-            { "term": { "event.code": "4625" }},
-            { "range": {
-                "@timestamp": {
-                  "gte": "now-5m",
-                  "lte": "now"
-                }
-            }}
-          ]
-        }
-      },
-      "aggs": {
-        "by_ip": {
-          "terms": {
-            "field": "host.ip",
-            "size": 10
-          },
-          "aggs": {
-            "event_count": {
-              "value_count": {
-                "field": "event.code"
-              }
-            },
-            "filter_by_minimum": {
-              "bucket_selector": {
-                "buckets_path": {
-                  "count": "event_count"
-                },
-                "script": "params.count >= 10"
-              }
+## 🧪 Lab Setup
+1. Installed **Winlogbeat** on a Windows VM (victim) to forward logs to Elasticsearch.
+2. Installed and configured **Elasticsearch** and **Kibana** on a separate monitoring system.
+3. Set up **ElastAlert** with a detection rule:
+   - Detects **10 failed login attempts (Event ID 4625)** from the same IP within 5 minutes.
+   - Sends an **email alert** using Gmail SMTP.
+4. Performed a **brute-force attack simulation** using Hydra.
+5. Verified alert in email.
+6. Faced and resolved configuration errors in `config.yaml` and `rule.yaml` related to missing fields.
+
+---
+
+## 🧠 Detection Logic
+- Track **failed logins** using Event ID `4625`.
+- If **10 or more** failed login attempts occur from the **same IP** within **5 minutes**, trigger an alert.
+- Optionally, correlate this with a **successful login** (Event ID `4624`) from the same IP.
+
+---
+
+## 🔍 Elasticsearch Query DSL
+```json
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "term": { "event.code": "4625" }},
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "now-5m",
+              "lte": "now"
             }
           }
         }
-      },
-      "size": 0
+      ]
     }
+  },
+  "aggs": {
+    "by_ip": {
+      "terms": {
+        "field": "host.ip",
+        "size": 10
+      },
+      "aggs": {
+        "event_count": {
+          "value_count": {
+            "field": "event.code"
+          }
+        },
+        "filter_by_minimum": {
+          "bucket_selector": {
+            "buckets_path": {
+              "count": "event_count"
+            },
+            "script": "params.count >= 10"
+          }
+        }
+      }
+    }
+  },
+  "size": 0
+}
+```
 
-## Kibana Detection Query:
-    Event.code: “4625” AND host.ip: “*” 
-You can you add your suspicious IP also "192.168.x.x"
-## Data Source Mapping:
-  | Source            | Event ID | Description                                      |
-  |-------------------|----------|--------------------------------------------------|
-  | Winlogbeat        | 4625     | Failed login attempt                             |
-  | Winlogbeat        | 4624     | Successful login                                 |
-  | Sysmon (optional) | 1        | Process creation (can be used to track attacks)  |
-  | Winlogbeat        | 4672     | Special privileges assigned to new logon         |
-## Sample Alert
-![Screenshot 2025-05-15 220749](https://github.com/user-attachments/assets/5fdc4124-44c0-44a7-b367-f0a08c74532c)
+---
 
+## 🔎 Kibana Detection Query
+```kql
+event.code: "4625" AND host.ip: "192.168.x.x"
+```
 
-## Sample Event
-![event code 4625](https://github.com/user-attachments/assets/ae380541-6ef3-40a4-b644-2760dddd9f4d)
+Replace `192.168.x.x` with the IP used in your test (e.g., Kali attacker machine).
 
+---
 
-## Recommendation:
-### What should an analyst do when this alert triggers?
-  When this alert triggers, the analyst should verify the source IP and user involved, confirm the sequence of failed and successful logins, check for any privilege escalation, and take immediate action if malicious activity is suspected.
-### Possible false positives?
-  •	Check if the login attempts align with the user’s normal login times and IP addresses.
-  
-  •	Exclude known internal or management IPs from alerts if they’re frequently used for administrative tasks.
-  
-  •	Ensure that Multi-Factor Authentication is enforced, making brute-force attempts less effective even if successful.
-## Detection Status:
-### Successfully Triggered  ✅
+## 📊 Data Source Mapping
 
+| Source            | Event ID | Description                                      |
+|-------------------|----------|--------------------------------------------------|
+| Winlogbeat        | 4625     | Failed login attempt                             |
+| Winlogbeat        | 4624     | Successful login                                 |
+| Sysmon (optional) | 1        | Process creation (track attacker tooling)        |
+| Winlogbeat        | 4672     | Privilege escalation (admin logon event)         |
 
+---
 
+## 📩 Sample Alert (Email Screenshot)
+![Sample Alert Screenshot](https://github.com/user-attachments/assets/5fdc4124-44c0-44a7-b367-f0a08c74532c)
 
+---
 
+## 🧾 Sample Event Log
+![Sample 4625 Event](https://github.com/user-attachments/assets/ae380541-6ef3-40a4-b644-2760dddd9f4d)
 
+---
 
+## 🛡️ Recommendations
 
+### 🔍 Analyst Action on Alert
+- Review the source IP address.
+- Confirm login time and user identity.
+- Check for a sequence of failed logins followed by a success.
+- Investigate for signs of privilege escalation or lateral movement.
 
+### ⚠️ Possible False Positives
+- Admins mistyping passwords before successful login.
+- Legitimate scheduled tasks or services failing authentication.
+- Misconfigured applications attempting to authenticate repeatedly.
 
+### ✅ Mitigation Advice
+- Enforce strong password policies.
+- Implement Multi-Factor Authentication (MFA).
+- Use account lockout policies.
+- Whitelist known IPs or internal scanners if needed.
 
+---
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## ✅ Detection Status
+**Successfully Triggered**  
+ElastAlert sent email alert upon detecting the brute-force sequence.
