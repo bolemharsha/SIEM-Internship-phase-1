@@ -52,7 +52,7 @@ Detect if 10 or more failed login attempts (Event ID 4625) are observed from the
                 "buckets_path": {
                   "count": "event_count"
                 },
-                "script": "params.count >= 4"
+                "script": "params.count >= 10"
               }
             }
           }
